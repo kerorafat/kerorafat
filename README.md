@@ -1,5 +1,4 @@
-[8:27 PM, 5/7/2022] eriny: .
-[9:57 PM, 5/7/2022] Kero Rafat: using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -610,10 +609,13 @@ namespace Simple_Shell
 
     }
 }
-  
-  ***************************************************************************************************************************************************
-  
-  using System;
+    
+    
+    
+    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    
+    
+    using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -677,9 +679,988 @@ namespace Simple_Shell
 
     }
 }
-  
-  *******************************************************************************************************************************
-  
-  
-  
-  
+    
+    
+    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    
+    
+    using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.IO;
+
+namespace Simple_Shell
+{
+    public static class Virtual_Disk
+    {
+
+        public static FileStream Disk;
+        public static void CREATEorOPEN_Disk(string path)
+        {
+            Disk = new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite);
+        }
+        public static int getFreeSpace()
+        {
+            return (1024 * 1024) - (int)Disk.Length;
+        }
+        public static void initalize(string path)
+        {
+            try
+            {
+                if (!File.Exists(path))
+                {
+                    CREATEorOPEN_Disk(path);
+                    byte[] b = new byte[1024];
+                    for (int i = 0; i < b.Length; i++)
+                        b[i] = 0;
+                    writeCluster(b, 0);
+                    FAT.createFAT();
+                    Directory root = new Directory("K:", 0x10, 5, null);
+                  
+                    root.writeDirectory();
+                    FAT.setClusterPointer(5, -1);
+                    Program.current = root;
+                    FAT.writeFAT();
+                }
+                else
+                {
+                    CREATEorOPEN_Disk(path);
+                    FAT.readFAT();
+                    Directory root = new Directory("K:", 0x10, 5, null);
+                    root.readDirectory();
+                    Program.current = root;
+                }
+            }
+            catch (IOException ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+        }
+        public static void writeCluster(byte[] cluster, int clusterIndex, int offset = 0, int count = 1024)
+        {
+            Disk.Seek(clusterIndex * 1024, SeekOrigin.Begin);
+            Disk.Write(cluster, offset, count);
+            Disk.Flush();
+        }
+        public static byte[] readCluster(int clusterIndex)
+        {
+            Disk.Seek(clusterIndex * 1024, SeekOrigin.Begin);
+            byte[] bytes = new byte[1024];
+            Disk.Read(bytes, 0, 1024);
+            return bytes;
+        }
+    }
+}
+                                                 
+                                                 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+                                                 
+                                                 
+                                                 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Simple_Shell
+{
+    class FAT
+    {
+        public static int[] Fat = new int[1024];
+        public static void createFAT()
+        {
+            for (int i = 0; i < Fat.Length; i++)
+            {
+                if (i == 0 || i == 4)
+                {
+                    Fat[i] = -1;
+                }
+                else if (i > 0 && i <= 3)
+                {
+                    Fat[i] = i + 1;
+                }
+                else
+                {
+                    Fat[i] = 0;
+                }
+            }
+        }
+        public static void writeFAT()
+        {
+            byte[] FATBYTES = Converter.ToBytes(FAT.Fat);
+            List<byte[]> ls = Converter.splitBytes(FATBYTES);
+            for (int i = 0; i < ls.Count; i++)
+            {
+                Virtual_Disk.writeCluster(ls[i], i + 1, 0, ls[i].Length);
+            }
+        }
+        public static void readFAT()
+        {
+            List<byte> ls = new List<byte>();
+            for (int i = 1; i <= 4; i++)
+            {
+                ls.AddRange(Virtual_Disk.readCluster(i));
+            }
+            Fat = Converter.ToInt(ls.ToArray());
+        }
+        public static void printFAT()
+        {
+            Console.WriteLine("FAT has the following: ");
+            for (int i = 0; i < Fat.Length; i++)
+                Console.WriteLine("FAT[" + i + "] = " + Fat[i]);
+        }
+        public static void setFAT(int[] arr)
+        {
+            if (arr.Length <= 1024)
+                Fat = arr;
+        }
+        public static int getAvilableCluster()
+        {
+            for (int i = 0; i < Fat.Length; i++)
+            {
+                if (Fat[i] == 0)
+                    return i;
+            }
+            return -1;//our disk is full
+        }
+        public static void setClusterPointer(int clusterIndex, int pointer)
+        {
+            Fat[clusterIndex] = pointer;
+        }
+        public static int getClusterPointer(int clusterIndex)
+        {
+            if (clusterIndex >= 0 && clusterIndex < Fat.Length)
+                return Fat[clusterIndex];
+            else
+                return -1;
+        }
+    }
+}
+                                                               
+                                                               ++++++++++++++++++++++++++++++++++++++++
+                                                               
+                                                               
+       using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Simple_Shell
+{
+    public static class Tokenizer
+    {
+        static Token generateToken(string arg, TokenType tokenType)
+        {
+            Token token;
+            token.key = tokenType;
+            token.value = arg;
+            return token;
+        }
+        static bool checkArg(string arg)
+        {
+            if (arg == "cd" || arg == "cls" || arg == "dir" || arg == "quit"
+                || arg == "copy" || arg == "del" || arg == "help"
+                || arg == "md" || arg == "rd" || arg == "rename"
+                || arg == "type" || arg == "import" || arg == "export")
+            {
+                return true;
+            }
+            return false;
+        }
+        static bool isFullPathd(string arg)
+        {
+            if ((arg.Contains(":") || arg.Contains("\\")) && !arg.Contains('.'))
+            {
+                return true;
+            }
+            return false;
+        }
+        static bool isFullPathf(string arg)
+        {
+            if ((arg.Contains(":") || arg.Contains("\\")) && arg.Contains('.'))
+            {
+                return true;
+            }
+            return false;
+        }
+        static bool isFileName(string arg)
+        {
+            if (arg.Contains('.')/*&&!arg.Contains("..")*/)
+            {
+                return true;
+            }
+            return false;
+        }
+        public static List<Token> GetTokens(string input)
+        {
+            List<Token> Tokens = new List<Token>();
+
+            if (input.Length == 0)
+                return null;
+            string[] inputs = input.Split(' ');
+            List<string> ls = new List<string>();
+            for (int i = 0; i < inputs.Length; i++)
+                if (inputs[i] != "" && inputs[i] != " ")
+                    ls.Add(inputs[i]);
+            string[] arguments = ls.ToArray();
+            arguments[0] = arguments[0].ToLower();
+            switch (arguments[0])
+            {
+                case "cd":
+                    if (arguments.Length == 1)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    }
+                    else if (arguments.Length == 2)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        if (isFullPathd(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToDirectory));
+                        else if (isFullPathf(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToFile));
+                        else if (isFileName(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FileName));
+                        else
+                            Tokens.Add(generateToken(arguments[1], TokenType.DirName));
+                    }
+                    else
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        for (int i = 1; i < arguments.Length; i++)
+                        {
+                            Tokens.Add(generateToken(arguments[i], TokenType.Not_Recognized));
+                        }
+                    }
+                    break;
+                case "cls":
+                    Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    if (arguments.Length > 1)
+                    {
+                        for (int i = 1; i < arguments.Length; i++)
+                        {
+                            Tokens.Add(generateToken(arguments[i], TokenType.Not_Recognized));
+                        }
+                    }
+                    break;
+                case "dir":
+                    if (arguments.Length == 1)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    }
+                    else if (arguments.Length == 2)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        if (isFullPathd(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToDirectory));
+                        else if (isFullPathf(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToFile));
+                        else if (isFileName(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FileName));
+                        else
+                            Tokens.Add(generateToken(arguments[1], TokenType.DirName));
+                    }
+                    else
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        for (int i = 1; i < arguments.Length; i++)
+                        {
+                            Tokens.Add(generateToken(arguments[i], TokenType.Not_Recognized));
+                        }
+                    }
+                    break;
+                case "quit":
+                    if (arguments.Length == 1)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    }
+                    else
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        for (int i = 1; i < arguments.Length; i++)
+                        {
+                            Tokens.Add(generateToken(arguments[i], TokenType.Not_Recognized));
+                        }
+                    }
+                    break;
+                case "copy":
+                    Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    break;
+                case "del":
+                    Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    break;
+                case "help":
+                    if (arguments.Length == 1)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    }
+                    else if (arguments.Length == 2)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        arguments[1] = arguments[1].ToLower();
+                        if (checkArg(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.Command));
+                        else
+                            Tokens.Add(generateToken(arguments[1], TokenType.Not_Recognized));
+                    }
+                    else
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        for (int i = 1; i < arguments.Length; i++)
+                        {
+                            Tokens.Add(generateToken(arguments[i], TokenType.Not_Recognized));
+                        }
+                    }
+                    break;
+                case "md":
+                    if (arguments.Length == 1)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    }
+                    else if (arguments.Length == 2)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        if (isFullPathd(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToDirectory));
+                        else if (isFullPathf(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToFile));
+                        else if (isFileName(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FileName));
+                        else
+                            Tokens.Add(generateToken(arguments[1], TokenType.DirName));
+                    }
+                    else
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        for (int i = 1; i < arguments.Length; i++)
+                        {
+                            Tokens.Add(generateToken(arguments[i], TokenType.Not_Recognized));
+                        }
+                    }
+                    break;
+                case "rd":
+                    if (arguments.Length == 1)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    }
+                    else if (arguments.Length == 2)
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        if (isFullPathd(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToDirectory));
+                        else if (isFullPathf(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FullPathToFile));
+                        else if (isFileName(arguments[1]))
+                            Tokens.Add(generateToken(arguments[1], TokenType.FileName));
+                        else
+                            Tokens.Add(generateToken(arguments[1], TokenType.DirName));
+                    }
+                    else
+                    {
+                        Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                        for (int i = 1; i < arguments.Length; i++)
+                        {
+                            Tokens.Add(generateToken(arguments[i], TokenType.Not_Recognized));
+                        }
+                    }
+                    break;
+                case "rename":
+                    Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    break;
+                case "type":
+                    Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    break;
+                case "import":
+                    Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    break;
+                case "export":
+                    Tokens.Add(generateToken(arguments[0], TokenType.Command));
+                    break;
+                default:
+                    Tokens.Add(generateToken(arguments[0], TokenType.Not_Recognized));
+                    break;
+
+            }
+            return Tokens;
+        }
+    }
+}
+    ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    
+    using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.IO;
+
+namespace Simple_Shell
+{
+    public static class Converter
+    {
+        public static byte[] ToBytes(int[] array)
+        {
+            byte[] bytes = null;
+            bytes = new byte[array.Length * sizeof(int)];
+            System.Buffer.BlockCopy(array, 0, bytes, 0, bytes.Length);
+            return bytes;
+        }
+        public static byte[] StringToBytes(string s)
+        {
+            byte[] bytes = new byte[s.Length];
+            for (int i = 0; i < s.Length; i++)
+            {
+                bytes[i] = (byte)s[i];
+            }
+            return bytes;
+        }
+        public static string BytesToString(byte[] bytes)
+        {
+            string s = string.Empty;
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                if ((char)bytes[i] != '\0')
+                    s += (char)bytes[i];
+                else
+                    break;
+            }
+            return s;
+        }
+        public static byte[] Directory_EntryToBytes(Directory_Entry d)
+        {
+            byte[] bytes = new byte[32];
+            for (int i = 0; i < d.dir_name.Length; i++)
+            {
+                bytes[i] = (byte)d.dir_name[i];
+            }
+            bytes[11] = d.dir_attr;
+            int j = 12;
+            for (int i = 0; i < d.dir_empty.Length; i++)
+            {
+                bytes[j] = d.dir_empty[i];
+                j++;
+            }
+            byte[] fc = BitConverter.GetBytes(d.dir_firstCluster);
+            for (int i = 0; i < fc.Length; i++)
+            {
+                bytes[j] = fc[i];
+                j++;
+            }
+            byte[] sz = BitConverter.GetBytes(d.dir_filesize);
+            for (int i = 0; i < sz.Length; i++)
+            {
+                bytes[j] = sz[i];
+                j++;
+            }
+            return bytes;
+         
+        }
+
+
+        public static Directory_Entry BytesToDirectory_Entry(Byte[] bytes)
+        {
+            char[] name = new char[11];
+            for (int i = 0; i < name.Length; i++)
+            {
+                name[i] = (char)bytes[i];
+            }
+            byte attr = bytes[11];
+            byte[] empty = new byte[12];
+            int j = 12;
+            for (int i = 0; i < empty.Length; i++)
+            {
+                empty[i] = bytes[j];
+                j++;
+            }
+            byte[] fc = new byte[4];
+            for (int i = 0; i < fc.Length; i++)
+            {
+                fc[i] = bytes[j];
+                j++;
+            }
+            int firstcluster = BitConverter.ToInt32(fc, 0);
+            byte[] sz = new byte[4];
+            for (int i = 0; i < sz.Length; i++)
+            {
+                sz[i] = bytes[j];
+                j++;
+            }
+            int filesize = BitConverter.ToInt32(sz, 0);
+            Directory_Entry d = new Directory_Entry(new string(name), attr, firstcluster);
+            d.dir_empty = empty;
+            d.dir_filesize = filesize;
+            return d;
+          
+        }
+        public static byte[] ToBytes(List<Directory_Entry> array)
+        {
+            using (MemoryStream stream = new MemoryStream())
+            {
+                var bformatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+
+                bformatter.Serialize(stream, array);
+                byte[] arr = stream.ToArray();
+                return arr;
+            }
+        }
+        public static int[] ToInt(byte[] bytes)
+        {
+            int[] ints = null;
+            ints = new int[bytes.Length / sizeof(int)];
+        
+
+            System.Buffer.BlockCopy(bytes, 0, ints, 0, bytes.Length);
+            return ints;
+        }
+        public static List<Directory_Entry> ToDirectory_Entry(byte[] bytes)
+        {
+          
+            using (MemoryStream stream = new MemoryStream(bytes))
+            {
+                stream.Seek(0, SeekOrigin.Begin);
+                var bformatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter();
+                List<Directory_Entry> ls = ((List<object>)bformatter.Deserialize(stream)).Cast<Directory_Entry>().ToList();
+                return ls;
+            }
+        }
+        public static List<byte[]> splitBytes(byte[] bytes)
+        {
+            List<byte[]> ls = new List<byte[]>();
+            int number_of_arrays = bytes.Length / 1024;
+            int rem = bytes.Length % 1024;
+            for (int i = 0; i < number_of_arrays; i++)
+            {
+                byte[] b = new byte[1024];
+                for (int j = i * 1024, k = 0; k < 1024; j++, k++)
+                {
+                    b[k] = bytes[j];
+                }
+                ls.Add(b);
+            }
+            if (rem > 0)
+            {
+                byte[] b1 = new byte[1024];
+                for (int i = number_of_arrays * 1024, k = 0; k < rem; i++, k++)
+                {
+                    b1[k] = bytes[i];
+                }
+                ls.Add(b1);
+            }
+            return ls;
+        }
+    }
+}
+                                                                     
+                                                                     +++++++++++++++++++++++++++++++++++++
+ 
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Simple_Shell
+{
+    [Serializable]
+    public class Directory_Entry
+    {
+        public char[] dir_name = new char[11];
+        public byte dir_attr;
+        public byte[] dir_empty = new byte[12];
+        public int dir_firstCluster;
+        public int dir_filesize;
+        public Directory_Entry()
+        {
+
+        }
+        public Directory_Entry(string name, byte dir_attr, int dir_firstCluster)
+        {
+            this.dir_attr = dir_attr;
+            if (dir_attr == 0x0)
+            {
+                string[] fileName = name.Split('.');
+                assignFileName(fileName[0].ToCharArray(), fileName[1].ToCharArray());
+            }
+            else if (dir_attr == 0x10)
+            {
+
+                assignDIRName(name.ToCharArray());
+            }
+            this.dir_firstCluster = dir_firstCluster;
+        }
+        public void assignFileName(char[] name, char[] extension)
+        {
+            if (name.Length <= 7 && extension.Length == 3)
+            {
+                int j = 0;
+                for (int i = 0; i < name.Length; i++)
+                {
+                    j++;
+                    this.dir_name[i] = name[i];
+                }
+                j++;
+                this.dir_name[j] = '.';
+                for (int i = 0; i < extension.Length; i++)
+                {
+                    j++;
+                    this.dir_name[j] = extension[i];
+                }
+                for (int i = ++j; i < dir_name.Length; i++)
+                {
+                    this.dir_name[i] = ' ';
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 7; i++)
+                {
+                    this.dir_name[i] = name[i];
+                }
+                this.dir_name[7] = '.';
+                for (int i = 0, j = 8; i < extension.Length; j++, i++)
+                {
+                    this.dir_name[j] = extension[i];
+                }
+            }
+        }
+        public void assignDIRName(char[] name)
+        {
+            if (name.Length <= 11)
+            {
+                int j = 0;
+                for (int i = 0; i < name.Length; i++)
+                {
+                    j++;
+                    this.dir_name[i] = name[i];
+                }
+                for (int i = ++j; i < dir_name.Length; i++)
+                {
+                    this.dir_name[i] = ' ';
+                }
+            }
+            else
+            {
+                int j = 0;
+                for (int i = 0; i < 11; i++)
+                {
+                    j++;
+                    this.dir_name[i] = name[i];
+                }
+            }
+        }
+    }
+}
+                                       +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Simple_Shell
+{
+    public class Directory : Directory_Entry
+    {
+        public List<Directory_Entry> DirOrFiles;
+        public Directory parent;
+        public Directory(string name, byte dir_attr, int dir_firstCluster, Directory pa) : base(name, dir_attr, dir_firstCluster)
+        {
+            DirOrFiles = new List<Directory_Entry>();
+            Directory_Entry me = this.GetDirectory_Entry();
+            DirOrFiles.Add(me);
+            if (pa != null)
+            {
+                parent = pa;
+                DirOrFiles.Add(this.parent.GetDirectory_Entry());
+            }
+
+        }
+        public void updateContent(Directory_Entry d)
+        {
+            int index = searchDirectory(new string(d.dir_name));
+            if (index != -1)
+            {
+                DirOrFiles.RemoveAt(index);
+                DirOrFiles.Insert(index, d);
+            }
+        }
+        public Directory_Entry GetDirectory_Entry()
+        {
+            Directory_Entry me = new Directory_Entry(new string(this.dir_name), this.dir_attr, this.dir_firstCluster);
+            return me;
+        }
+        public void writeDirectory()
+        {
+            byte[] dirsorfilesBYTES = new byte[DirOrFiles.Count * 32];
+            for (int i = 0; i < DirOrFiles.Count; i++)
+            {
+                byte[] b = Converter.Directory_EntryToBytes(this.DirOrFiles[i]);
+                for (int j = i * 32, k = 0; k < b.Length; k++, j++)
+                    dirsorfilesBYTES[j] = b[k];
+            }
+            List<byte[]> bytesls = Converter.splitBytes(dirsorfilesBYTES);
+            int clusterFATIndex;
+            if (this.dir_firstCluster != 0)
+            {
+                clusterFATIndex = this.dir_firstCluster;
+            }
+            else
+            {
+                clusterFATIndex = FAT.getAvilableCluster();
+                this.dir_firstCluster = clusterFATIndex;
+            }
+            int lastCluster = -1;
+            for (int i = 0; i < bytesls.Count; i++)
+            {
+                if (clusterFATIndex != -1)
+                {
+                    Virtual_Disk.writeCluster(bytesls[i], clusterFATIndex, 0, bytesls[i].Length);
+                    FAT.setClusterPointer(clusterFATIndex, -1);
+                    if (lastCluster != -1)
+                        FAT.setClusterPointer(lastCluster, clusterFATIndex);
+                    lastCluster = clusterFATIndex;
+                    clusterFATIndex = FAT.getAvilableCluster();
+                }
+            }
+            if (this.parent != null)
+            {
+                this.parent.updateContent(this.GetDirectory_Entry());
+                this.parent.writeDirectory();
+            }
+            FAT.writeFAT();
+        }
+        public void readDirectory()
+        {
+            if (this.dir_firstCluster != 0)
+            {
+                DirOrFiles = new List<Directory_Entry>();
+                int cluster = this.dir_firstCluster;
+                int next = FAT.getClusterPointer(cluster);
+                List<byte> ls = new List<byte>();
+                do
+                {
+                    ls.AddRange(Virtual_Disk.readCluster(cluster));
+                    cluster = next;
+                    if (cluster != -1)
+                        next = FAT.getClusterPointer(cluster);
+                }
+                while (next != -1);
+                for (int i = 0; i < ls.Count; i++)
+                {
+                    byte[] b = new byte[32];
+                    for (int k = i * 32, m = 0; m < b.Length && k < ls.Count; m++, k++)
+                    {
+                        b[m] = ls[k];
+                    }
+                    if (b[0] == 0)
+                        break;
+                    DirOrFiles.Add(Converter.BytesToDirectory_Entry(b));
+                }
+            }
+        }
+        public void deleteDirectory()
+        {
+            if (this.dir_firstCluster != 0)
+            {
+                int cluster = this.dir_firstCluster;
+                int next = FAT.getClusterPointer(cluster);
+                do
+                {
+                    FAT.setClusterPointer(cluster, 0);
+                    cluster = next;
+                    if (cluster != -1)
+                        next = FAT.getClusterPointer(cluster);
+                }
+                while (cluster != -1);
+            }
+            if (this.parent != null)
+            {
+                int index = this.parent.searchDirectory(new string(this.dir_name));
+                if (index != -1)
+                {
+                    this.parent.DirOrFiles.RemoveAt(index);
+                    this.parent.writeDirectory();
+                }
+            }
+            if (Program.current == this)
+            {
+                if (this.parent != null)
+                {
+                    Program.current = this.parent;
+                    Program.currentPath = Program.currentPath.Substring(0, Program.currentPath.LastIndexOf('\\'));
+                    Program.current.readDirectory();
+                }
+            }
+            FAT.writeFAT();
+        }
+        public int searchDirectory(string name)
+        {
+            if (name.Length < 11)
+            {
+                name += "\0";
+                for (int i = name.Length + 1; i < 12; i++)
+                    name += " ";
+            }
+            else
+            {
+                name = name.Substring(0, 11);
+            }
+            for (int i = 0; i < DirOrFiles.Count; i++)
+            {
+                string n = new string(DirOrFiles[i].dir_name);
+                if (n.Equals(name))
+                    return i;
+            }
+            return -1;
+        }
+    }
+}
+    
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    
+    
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Simple_Shell
+{
+    public class File_Entry : Directory_Entry
+    {
+        public string content;
+        public Directory parent;
+        public File_Entry(string name, byte dir_attr, int dir_firstCluster, Directory pa) : base(name, dir_attr, dir_firstCluster)
+        {
+            content = string.Empty;
+            if (pa != null)
+                parent = pa;
+        }
+        public Directory_Entry GetDirectory_Entry()
+        {
+            Directory_Entry me = new Directory_Entry(new string(this.dir_name), this.dir_attr, this.dir_firstCluster);
+            return me;
+        }
+        public void writeFileContent()
+        {
+            byte[] contentBYTES = Converter.StringToBytes(content);
+            List<byte[]> bytesls = Converter.splitBytes(contentBYTES);
+            int clusterFATIndex;
+            if (this.dir_firstCluster != 0)
+            {
+                clusterFATIndex = this.dir_firstCluster;
+            }
+            else
+            {
+                clusterFATIndex = FAT.getAvilableCluster();
+                this.dir_firstCluster = clusterFATIndex;
+            }
+            int lastCluster = -1;
+            for (int i = 0; i < bytesls.Count; i++)
+            {
+                if (clusterFATIndex != -1)
+                {
+                    Virtual_Disk.writeCluster(bytesls[i], clusterFATIndex, 0, bytesls[i].Length);
+                    FAT.setClusterPointer(clusterFATIndex, -1);
+                    if (lastCluster != -1)
+                        FAT.setClusterPointer(lastCluster, clusterFATIndex);
+                    lastCluster = clusterFATIndex;
+                    clusterFATIndex = FAT.getAvilableCluster();
+                }
+            }
+        }
+        public void readFileContent()
+        {
+            if (this.dir_firstCluster != 0)
+            {
+                content = string.Empty;
+                int cluster = this.dir_firstCluster;
+                int next = FAT.getClusterPointer(cluster);
+                List<byte> ls = new List<byte>();
+                do
+                {
+                    ls.AddRange(Virtual_Disk.readCluster(cluster));
+                    cluster = next;
+                    if (cluster != -1)
+                        next = FAT.getClusterPointer(cluster);
+                }
+                while (next != -1);
+                content = Converter.BytesToString(ls.ToArray());
+            }
+        }
+        public void deleteFile()
+        {
+            if (this.dir_firstCluster != 0)
+            {
+                int cluster = this.dir_firstCluster;
+                int next = FAT.getClusterPointer(cluster);
+                do
+                {
+                    FAT.setClusterPointer(cluster, 0);
+                    cluster = next;
+                    if (cluster != -1)
+                        next = FAT.getClusterPointer(cluster);
+                }
+                while (cluster != -1);
+            }
+            if (this.parent != null)
+            {
+                int index = this.parent.searchDirectory(new string(this.dir_name));
+                if (index != -1)
+                {
+                    this.parent.DirOrFiles.RemoveAt(index);
+                    this.parent.writeDirectory();
+                    FAT.writeFAT();
+                }
+            }
+        }
+    }
+}
+    
+    +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+    using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace Simple_Shell
+{
+    public enum TokenType
+    {
+        Command, Not_Recognized, FullPathToDirectory, FileName, DirName, FullPathToFile
+    }
+    public struct Token
+    {
+        public TokenType key;
+        public string value;
+    }
+    class Program
+    {
+        public static Directory current;
+        public static string currentPath;
+        static void Main(string[] args)
+        {
+            Console.WriteLine("Welcome to My Simple shell\n");
+            Virtual_Disk.initalize("virtualDisk");
+           // FAT.printFAT();
+            currentPath = new string(current.dir_name);
+            currentPath = currentPath.Trim(new char[] { '\0', ' ' });
+            while (true)
+            {
+                Console.Write(currentPath + "\\" + ">");
+                current.readDirectory();
+                //for (int i = 0; i < current.DirOrFiles.Count; i++)
+                //{
+                //    Console.WriteLine(new string(current.DirOrFiles[i].dir_name) + $" fc={current.DirOrFiles[i].dir_firstCluster}");
+                //}
+                string input;
+                input = Console.ReadLine();
+                Parser.parse(input);
+            }
+        }
+    }
+}
